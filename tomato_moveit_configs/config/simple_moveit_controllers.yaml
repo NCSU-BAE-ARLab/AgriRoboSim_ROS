@@ -1,0 +1,12 @@
+controller_list:
+  - name: Robot1_controller
+    action_ns: follow_joint_trajectory
+    type: FollowJointTrajectory
+    default: True
+    joints:
+      - rob1_shoulder_pan_joint
+      - rob1_shoulder_lift_joint
+      - rob1_elbow_joint
+      - rob1_wrist_1_joint
+      - rob1_wrist_2_joint
+      - rob1_wrist_3_joint

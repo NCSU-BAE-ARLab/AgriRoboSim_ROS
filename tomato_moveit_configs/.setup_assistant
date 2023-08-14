@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: tomato_moveit_configs
+    relative_path: urdf/benchbot_sim.urdf.xacro
+    xacro_args: ""
+  SRDF:
+    relative_path: config/ur5e_robot.srdf
+  CONFIG:
+    author_name: Xingjian Li
+    author_email: xli228@ncsu.edu
+    generated_timestamp: 1690316845

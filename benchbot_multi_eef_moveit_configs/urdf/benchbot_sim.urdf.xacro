@@ -1,0 +1,141 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="ur10_robot">
+    <link name="world"/>
+    <link name="rob1_ee_link">
+        <inertial>
+            <origin xyz="0.0 0 0.04" rpy="0.0 0.0 0.0"/>
+            <mass value=".02"/>
+            <inertia ixx=".001" ixy=".001" ixz=".001" iyy=".001" iyz=".001" izz=".001"/>
+        </inertial>
+        <visual>
+            <origin xyz="0.0 0 0.08" rpy="0.0 0.0 0.0"/>
+            <geometry>
+                <cylinder radius=".08" length=".16"/>
+            </geometry>
+            <material name="White">
+                <color rgba="1.0 1.0 1.0 1.0" />
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.0 0 0.08" rpy="0.0 0.0 0.0"/>
+            <geometry>
+            <cylinder radius=".08" length=".16"/>
+            </geometry>
+        </collision>
+    </link>
+    <gazebo reference='rob1_ee_link'>
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <material>
+            Gazebo/Orange
+        </material>
+    </gazebo>
+        <link name="rob2_ee_link">
+        <inertial>
+            <origin xyz="0.0 0 0.04" rpy="0.0 0.0 0.0"/>
+            <mass value=".02"/>
+            <inertia ixx=".001" ixy=".001" ixz=".001" iyy=".001" iyz=".001" izz=".001"/>
+        </inertial>
+        <visual>
+            <origin xyz="0.0 0 0.08" rpy="0.0 0.0 0.0"/>
+            <geometry>
+                <cylinder radius=".08" length=".16"/>
+            </geometry>
+            <material name="White">
+                <color rgba="1.0 1.0 1.0 1.0" />
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.0 0 0.08" rpy="0.0 0.0 0.0"/>
+            <geometry>
+            <cylinder radius=".08" length=".16"/>
+            </geometry>
+        </collision>
+    </link>
+    <gazebo reference='rob2_ee_link'>
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <material>
+            Gazebo/Orange
+        </material>
+    </gazebo>
+    <joint name="rob1_wrist3_ee_joint" type="fixed">
+        <parent link="rob1_wrist_3_link"/>
+        <child link="rob1_ee_link"/>
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+    </joint>
+    <joint name="rob2_wrist3_ee_joint" type="fixed">
+        <parent link="rob2_wrist_3_link"/>
+        <child link="rob2_ee_link"/>
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+    </joint>
+    
+    <link name="rob1_cam_link"/>
+    <link name="rob2_cam_link"/>
+    <joint name="rob1_ee_cam_joint" type="fixed">
+        <parent link="rob1_ee_link"/>
+        <child link="rob1_cam_link"/>
+        <origin xyz="0.0 0.0 0.01" rpy="0.0 0.0 0.0"/>
+    </joint>
+    <joint name="rob2_ee_cam_joint" type="fixed">
+        <parent link="rob2_ee_link"/>
+        <child link="rob2_cam_link"/>
+        <origin xyz="0.0 0.0 0.01" rpy="0.0 0.0 0.0"/>
+    </joint>
+    <xacro:include filename="$(find ur_gazebo)/urdf/ur_macro.xacro"/>
+    <xacro:arg name="joint_limit_params" default="$(find ur_description)/config/ur10/joint_limits.yaml"/>
+    <xacro:arg name="kinematics_params" default="$(find ur_description)/config/ur10/default_kinematics.yaml"/>
+    <xacro:arg name="physical_params" default="$(find ur_description)/config/ur10/physical_parameters.yaml"/>
+    <xacro:arg name="visual_params" default="$(find ur_description)/config/ur10/visual_parameters.yaml"/>
+    <xacro:arg name="transmission_hw_interface" default="hardware_interface/EffortJointInterface"/>
+    <xacro:arg name="safety_limits" default="false"/>
+    <xacro:arg name="safety_pos_margin" default="0.15"/>
+    <xacro:arg name="safety_k_position" default="20"/>
+
+
+
+    <!-- Instantiate the Gazebo robot and pass it all the required arguments. -->
+    <xacro:ur_robot_gazebo
+      prefix="rob1_"
+      joint_limits_parameters_file="$(arg joint_limit_params)"
+      kinematics_parameters_file="$(arg kinematics_params)"
+      physical_parameters_file="$(arg physical_params)"
+      visual_parameters_file="$(arg visual_params)"
+      transmission_hw_interface="$(arg transmission_hw_interface)"
+      safety_limits="$(arg safety_limits)"
+      safety_pos_margin="$(arg safety_pos_margin)"
+      safety_k_position="$(arg safety_k_position)"
+    />
+    <xacro:ur_robot_gazebo
+      prefix="rob2_"
+      joint_limits_parameters_file="$(arg joint_limit_params)"
+      kinematics_parameters_file="$(arg kinematics_params)"
+      physical_parameters_file="$(arg physical_params)"
+      visual_parameters_file="$(arg visual_params)"
+      transmission_hw_interface="$(arg transmission_hw_interface)"
+      safety_limits="$(arg safety_limits)"
+      safety_pos_margin="$(arg safety_pos_margin)"
+      safety_k_position="$(arg safety_k_position)"
+    />
+
+    <!-- <joint name="base_joint1" type="fixed">
+        <parent link="pedestal1" />
+        <child link="rob1_base_link" />
+        <origin xyz="0 0 .5" rpy="0.0 0.0 0.0"/>
+    </joint>
+    <joint name="base_joint2" type="fixed">
+      <origin xyz="0 0 .5" rpy="0.0 0.0 0.0"/>
+      <parent link="pedestal2"/>
+      <child link="rob2_base_link"/>
+    </joint> -->
+    <joint name="base_joint1" type="fixed">
+        <parent link="world" />
+        <child link="rob1_base_link" />
+        <origin xyz="0 -1 1.5" rpy="0.0 0.0 0.0"/>
+    </joint>
+    <joint name="base_joint2" type="fixed">
+      <origin xyz="0 1 1.5" rpy="0.0 0.0 0.0"/>
+      <parent link="world"/>
+      <child link="rob2_base_link"/>
+    </joint>
+</robot>
