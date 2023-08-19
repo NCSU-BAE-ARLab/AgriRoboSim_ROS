@@ -171,25 +171,28 @@ class MoveGroupPythonInterfaceTutorial(object):
             type_move = self.go_to_pose_goal(group, xyz = xyz, rpy = rpy)
         return type_move
     def add_scene(self):
+        #robot_z = 1
         box_pose = geometry_msgs.msg.PoseStamped()
         box_pose.header.frame_id = "world"
         box_pose.pose.position.x = 0.0
         box_pose.pose.position.y = -1.0
-        box_pose.pose.position.z = 0.6
+        box_pose.pose.position.z = 0.6+0.1
         q = tf.transformations.quaternion_from_euler(0.0, 0.0, 0.0)
         box_pose.pose.orientation.x = q[0]
         box_pose.pose.orientation.y = q[0]
         box_pose.pose.orientation.z = q[0]
         box_pose.pose.orientation.w = q[0]
-        self.scene.add_box("plant_stand", box_pose, size=(2, 1, .2))
+        #self.scene.add_box("plant_stand", box_pose, size=(2, 1, .2))
         box_pose.pose.position.y = -1.25
         box_pose.pose.position.z = 1.5
         self.scene.add_box("plants", box_pose, size=(2, .7, 1))
         #box_pose.pose.position.y = 1.0
-        box_pose.pose.position.z = 0.75
+        #box_pose.pose.position.z = 0.75
         #self.scene.add_box("rob2_stand", box_pose, size=(0.2, 0.2, .95))
-        box_pose.pose.position.y = 0
-        self.scene.add_box("rob1_stand", box_pose, size=(0.5, 0.5, .45))
+        box_pose.pose.position.y = .15
+        box_pose.pose.position.z = 1-.21
+        box_pose.pose.position.x = .25
+        self.scene.add_box("rob1_stand", box_pose, size=(0.99, 0.67, .4))
 
 class RViz_UE_Interface(object):
     def __init__(self, scene : moveit_commander.PlanningSceneInterface) -> None:
@@ -282,9 +285,9 @@ def callback_joint(data : JointState, args):#, goalReached, csv_writer):
 
 def callback_UE1(data, args):#_ue_pos, _ros_pos, tf_listener):
     #print(data)
-    args[0][0] = -data.x/100
+    args[0][0] = -(data.x+150)/100
     args[0][1] = data.y/100
-    args[0][2] = data.z/100
+    args[0][2] = (data.z+10)/100
     (trans, quat) = args[2].lookupTransform('world','rob1_ee_link',rospy.Time(0))
     args[1][0] = trans[0]
     args[1][1] = trans[1]

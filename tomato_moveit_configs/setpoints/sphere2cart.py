@@ -54,13 +54,16 @@ def CylindricalToRotation(cylinder, robotID = 0):
 Robot1_Coord = [0,0,1]
 
 # XYZ
-top_left = [0.4,-0.35,1.66]
-width = 0.8
-height = 0.8
-width_n = 6
-height_n = 5
-y = np.linspace(top_left[0],top_left[0]-width, width_n)
-z = np.linspace(top_left[2],top_left[2]-height, height_n)
+depth = -0.4
+top_left = [.5,depth,1.7]
+width = 1
+height = 1
+width_n = 2
+height_n = 2
+offset_width = (width/width_n)/2
+offset_height = (height/height_n)/2
+y = np.linspace(top_left[0]-offset_width,top_left[0]-width+offset_width, width_n)
+z = np.linspace(top_left[2]-offset_height,top_left[2]-height+offset_height, height_n)
 yv, zv = np.meshgrid(y,z)
 Robot1_Setpoints_Cartesian = np.vstack([yv.ravel(), np.full(yv.ravel().shape, top_left[1]), zv.ravel()])
 print(Robot1_Setpoints_Cartesian)
