@@ -36,11 +36,37 @@
         <child link="rob1_ee_link"/>
         <origin xyz="0.0 0.0 0.00" rpy="0.0 0.0 0.0"/>
     </joint>
-    <link name="rob1_cam_link"/>
-    <joint name="rob1_ee_cam_joint" type="fixed">
+    <link name="rob1_cam_pivot_link"/>
+    <joint name="rob1_ee_cam_pivot_joint" type="fixed">
         <parent link="rob1_ee_link"/>
-        <child link="rob1_cam_link"/>
-        <origin xyz="0.0 0.0 0.01" rpy="0.0 0.0 0.0"/>
+        <child link="rob1_cam_pivot_link"/>
+        <origin xyz="0.0 0.0 0.18" rpy="0.0 0.0 0.0"/>
+    </joint>
+
+    
+    <link name="rob1_cam1_link"/>
+    <joint name="rob1_cam1_joint" type="fixed">
+        <parent link="rob1_cam_pivot_link"/>
+        <child link="rob1_cam1_link"/>
+        <origin xyz="0.0 0.01 0.0" rpy="-1.57079632679 0.0 0.0"/>
+    </joint>
+    <link name="rob1_cam2_link"/>
+    <joint name="rob1_cam2_joint" type="fixed">
+        <parent link="rob1_cam1_link"/>
+        <child link="rob1_cam2_link"/>
+        <origin xyz="0.01 0.0 -0.01" rpy="0.0 1.57079632679 0.0"/>
+    </joint>
+    <link name="rob1_cam3_link"/>
+    <joint name="rob1_cam3_joint" type="fixed">
+        <parent link="rob1_cam2_link"/>
+        <child link="rob1_cam3_link"/>
+        <origin xyz="0.01 0.0 -0.01" rpy="0.0 1.57079632679 0.0"/>
+    </joint>
+    <link name="rob1_cam4_link"/>
+    <joint name="rob1_cam4_joint" type="fixed">
+        <parent link="rob1_cam3_link"/>
+        <child link="rob1_cam4_link"/>
+        <origin xyz="0.01 0.0 -0.01" rpy="0.0 1.57079632679 0.0"/>
     </joint>
     
     <xacro:include filename="$(find ur_gazebo)/urdf/ur_macro.xacro"/>

@@ -54,12 +54,12 @@ def CylindricalToRotation(cylinder, robotID = 0):
 Robot1_Coord = [0,0,1]
 
 # XYZ
-depth = -0.4
+depth = -0.5
 top_left = [.5,depth,1.7]
 width = 1
 height = 1
-width_n = 2
-height_n = 2
+width_n = 3
+height_n = 3
 offset_width = (width/width_n)/2
 offset_height = (height/height_n)/2
 y = np.linspace(top_left[0]-offset_width,top_left[0]-width+offset_width, width_n)

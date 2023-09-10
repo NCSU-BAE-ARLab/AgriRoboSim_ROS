@@ -21,13 +21,13 @@ import open3d as o3d
 import os
 import cv2
 MAX_PLANNING_ATTEMPTS = 5
-
+os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 # roslaunch demo.launch
 def readSetPoints(filePath = None):
     if filePath is not None:
-        pos1 = np.loadtxt(filePath+'/setpoints1_xyz.csv', delimiter=',')
+        pos1 = np.loadtxt(filePath+'/setpoints1_xyz.csv', delimiter=',').reshape((-1,3))
         #pos2 = np.loadtxt(filePath+'/setpoints2_xyz.csv', delimiter=',')
-        rot1 = np.loadtxt(filePath+'/setpoints1_rot.csv', delimiter=',')
+        rot1 = np.loadtxt(filePath+'/setpoints1_rot.csv', delimiter=',').reshape((-1,3))
         #rot2 = np.loadtxt(filePath+'/setpoints2_rot.csv', delimiter=',')
         print(pos1.shape)
         print(rot1.shape)
@@ -57,7 +57,7 @@ class MoveGroupPythonInterfaceTutorial(object):
 
         self.robot_group_names = self.robot.get_group_names()
         print("Configuring Robots...")
-        self.config_group(self.robot1_group, planner="RRTConnect")
+        self.config_group(self.robot1_group, planner="RRTConnect", time=4)
         #self.config_group(self.robot2_group, planner="RRTConnect")
         print("Configuring Scene...")
         self.add_scene()
@@ -183,7 +183,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         box_pose.pose.orientation.z = q[0]
         box_pose.pose.orientation.w = q[0]
         #self.scene.add_box("plant_stand", box_pose, size=(2, 1, .2))
-        box_pose.pose.position.y = -1.25
+        box_pose.pose.position.y = -1.1
         box_pose.pose.position.z = 1.5
         self.scene.add_box("plants", box_pose, size=(2, .7, 1))
         #box_pose.pose.position.y = 1.0
@@ -195,13 +195,17 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.scene.add_box("rob1_stand", box_pose, size=(0.99, 0.67, .4))
 
 class RViz_UE_Interface(object):
-    def __init__(self, scene : moveit_commander.PlanningSceneInterface) -> None:
+    def __init__(self, scene : moveit_commander.PlanningSceneInterface, listener) -> None:
         from sensor_msgs.msg import PointCloud2
+        self.listener = listener
         self.scene = scene
         #self.ue_intrinsics = o3d.camera.PinholeCameraIntrinsic(1920,1080,2424.2424877852509, 2424.2424877852509, 960, 540)
-        self.ue_intrinsics = o3d.camera.PinholeCameraIntrinsic(1920,1080,1656.661035256662, 1658.711605946089, 960, 540)
+        #self.ue_intrinsics = o3d.camera.PinholeCameraIntrinsic(1920,1080,1656.661035256662, 1658.711605946089, 960, 540) # 1920x1080, 60 FOV
+        #self.ue_intrinsics = o3d.camera.PinholeCameraIntrinsic(640,480,320, 320, 320, 240) # 640x480, 90 FOV
+        self.ue_intrinsics = o3d.camera.PinholeCameraIntrinsic(1280,960,640, 640, 640, 480) # 1280x960, 90 FOV
         self.frame_id = "world"
         self.pcd_pub = rospy.Publisher('/unreal/point_clouds', PointCloud2, queue_size=1)
+        self.combined_point_cloud = o3d.geometry.PointCloud()
         pass
     def UEdepth_to_RViz_pointcloud(self, depth, color):        
         import std_msgs.msg
@@ -210,15 +214,33 @@ class RViz_UE_Interface(object):
         # generate point cloud
 
         o3d_depth = o3d.geometry.Image(depth)#*87.5)
-        #print(np.max(depth/100.))
+        
         o3d_color = o3d.geometry.Image(color)
         o3d_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d_color, o3d_depth, convert_rgb_to_intensity=False)
+        
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(o3d_rgbd, self.ue_intrinsics)
         pcd = pcd.scale(87.5,[0,0,0])
 
         header = std_msgs.msg.Header()
         header.stamp = rospy.Time.now()
-        header.frame_id = self.frame_id
+        header.frame_id = "world"
+        #header.frame_id = self.frame_id
+        p, q = self.listener.lookupTransform('world',self.frame_id,rospy.Time(0))
+        #pcd.transfrom()
+        #print(transform)
+        norm = np.linalg.norm(q)
+        if np.abs(norm - 1.0) > 1e-3:
+            raise ValueError(
+                "Received un-normalized quaternion (q = {0:s} ||q|| = {1:3.6f})".format(
+                    str(q), np.linalg.norm(q)))
+        elif np.abs(norm - 1.0) > 1e-6:
+            q = q / norm
+        g = tf.transformations.quaternion_matrix(q)
+        g[0:3, -1] = p
+        #print(g)
+        pcd = pcd.transform(g)
+        self.combined_point_cloud += pcd
+        self.save_combined_point_cloud()
         fields = [PointField('x', 0, PointField.FLOAT32, 1),
                   PointField('y', 4, PointField.FLOAT32, 1),
                   PointField('z', 8, PointField.FLOAT32, 1),
@@ -236,35 +258,66 @@ class RViz_UE_Interface(object):
         #      o3d_pcd_colors[0,1],
         #      o3d_pcd_colors[0,2])
         packed_points = np.hstack((pcd.points,rgba))
-        ros_pcd_color = pcl2.create_cloud(header, fields, packed_points[::500])
+        print(packed_points.shape)
+        ros_pcd_color = pcl2.create_cloud(header, fields, packed_points[::100])
         #print(ros_pcd)
         self.pcd_pub.publish(ros_pcd_color)
         #o3d.visualization.draw_geometries([pcd])
-    def update_RViz_point_cloud(self, wait_for_image = True, time_out = 5):
+    def update_RViz_point_cloud(self, wait_for_image = True, time_out = 5, publish = False):
         image_dir = "/mnt/d/UnrealProjects/Project1-UR10/Test2 5.2/Saved/Test/"
         temp_images = os.listdir(image_dir+"temp/")
         #print(temp_images)
         found_image = [f for f in temp_images if "_Depth" in f or "_Color" in f]
         if wait_for_image:
             timeout_time = time.time() + time_out
-            while len(found_image) < 2:
+            while len(found_image) < 3:
                 temp_images = os.listdir(image_dir+"temp/")
-                found_image = [f for f in temp_images if "_Depth" in f or "_Color" in f]
+                found_image = [f for f in temp_images if "_Depth" in f or "_Color" in f or "_Segment" in f]
                 #print(found_image)
                 if time.time() > timeout_time:
                     print("Timed out waiting for Image")
                     return
         else:
-            if len(found_image) < 2:
+            if len(found_image) < 3:
                 return
         color = cv2.cvtColor(cv2.imread(image_dir+"temp/"+[i for i in found_image if "_Color" in i][0]), cv2.COLOR_BGRA2RGB)
+        segment = cv2.cvtColor(cv2.imread(image_dir+"temp/"+[i for i in found_image if "_Segment" in i][0]), cv2.COLOR_BGRA2RGB)
         depth = cv2.imread(image_dir+"temp/"+[i for i in found_image if "_Depth" in i][0], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+        #plt.subplot(2, 2, 1)
+        #plt.imshow(color)
+        #plt.subplot(2, 2, 2)
+        #plt.imshow(segment)
         import shutil
         shutil.move(image_dir+"temp/"+[i for i in found_image if "_Color" in i][0], image_dir+"Color/"+[i for i in found_image if "_Color" in i][0])
         shutil.move(image_dir+"temp/"+[i for i in found_image if "_Depth" in i][0], image_dir+"Depth/"+[i for i in found_image if "_Depth" in i][0])
-
-        self.UEdepth_to_RViz_pointcloud(depth, color)
-        
+        shutil.move(image_dir+"temp/"+[i for i in found_image if "_Segment" in i][0], image_dir+"Segmentation/"+[i for i in found_image if "_Segment" in i][0])
+        #shutil.move(image_dir+"temp/"+[i for i in found_image if "_Segment" in i][0], image_dir+"Segmentation/"+[i for i in found_image if "_Segment" in i][0])
+        if publish: self.UEdepth_to_RViz_pointcloud(self.tomato_filter(segment, depth), color)
+        #if publish: self.UEdepth_to_RViz_pointcloud(depth, color)
+    def tomato_filter(self, segment_image, depth_image, distance = .35, percentage = 0.5):
+        dimension = segment_image.shape[0] * segment_image.shape[1]
+        tomato_color_counts = sum(sum(segment_image[:,:,0] == 255))
+        tomato_percentage = tomato_color_counts / dimension * 100
+        print(tomato_percentage)
+        if tomato_percentage <= percentage:
+            segment_image[:,:,0] = 0
+        mask = (segment_image[:,:,0] == 255).astype(np.uint8)
+        depth_image = np.where(depth_image < distance*100, depth_image, 0)
+        #plt.imshow(segment_image)
+        #plt.show()
+        #plt.clear()
+        #print(np.max(mask))
+        #plt.subplot(2, 2, 3)
+        #plt.title('depth image')
+        #print(depth_image)
+        #plt.imshow(depth_image[:,:,2])
+        #plt.subplot(2, 2, 4)
+        #plt.title('filtered image')
+        #plt.imshow(cv2.bitwise_and(depth_image,depth_image,mask = mask)[:,:,2])
+        #plt.show()
+        return cv2.bitwise_and(depth_image,depth_image,mask = mask)
+    def save_combined_point_cloud(self):
+        o3d.io.write_point_cloud("./outputs/combined_point_cloud.ply", self.combined_point_cloud)
 
 # elbow sholder lift pan 1 2 3
     #interface.add_box()
@@ -285,7 +338,7 @@ def callback_joint(data : JointState, args):#, goalReached, csv_writer):
 
 def callback_UE1(data, args):#_ue_pos, _ros_pos, tf_listener):
     #print(data)
-    args[0][0] = -(data.x+150)/100
+    args[0][0] = -(data.x+300)/100
     args[0][1] = data.y/100
     args[0][2] = (data.z+10)/100
     (trans, quat) = args[2].lookupTransform('world','rob1_ee_link',rospy.Time(0))
@@ -320,11 +373,19 @@ if __name__ == "__main__":
     rate = rospy.Rate(100)
     pub01 = rospy.Publisher('/unreal/0/vec3_1', Vector3, queue_size=1)#0)
     pub02 = rospy.Publisher('/unreal/0/vec3_2', Vector3, queue_size=1)#0)
+    pub11 = rospy.Publisher('/unreal/1/vec3_1', Vector3, queue_size=1)#0)
+    pub12 = rospy.Publisher('/unreal/1/vec3_2', Vector3, queue_size=1)#0)
+    pub21 = rospy.Publisher('/unreal/2/vec3_1', Vector3, queue_size=1)#0)
+    pub22 = rospy.Publisher('/unreal/2/vec3_2', Vector3, queue_size=1)#0)
     #pub11 = rospy.Publisher('/unreal/1/vec3_1', Vector3, queue_size=1)#0)
     #pub12 = rospy.Publisher('/unreal/1/vec3_2', Vector3, queue_size=1)#0)
     pub_data0 = rospy.Publisher('/unreal/0/takedata', Bool, queue_size=1)
+    pub_data1 = rospy.Publisher('/unreal/1/takedata', Bool, queue_size=1)
+    pub_data2 = rospy.Publisher('/unreal/2/takedata', Bool, queue_size=1)
     #pub_data1 = rospy.Publisher('/unreal/1/takedata', Bool, queue_size=1)
     rospy.Subscriber('/joint_states', JointState, callback_joint, callback_args=(pub01,pub02))#,pub11,pub12))
+    rospy.Subscriber('/joint_states', JointState, callback_joint, callback_args=(pub11,pub12))#,pub11,pub12))
+    rospy.Subscriber('/joint_states', JointState, callback_joint, callback_args=(pub21,pub22))#,pub11,pub12))
     listener = tf.TransformListener()
     
     time.sleep(1)
@@ -336,9 +397,10 @@ if __name__ == "__main__":
     #rospy.Subscriber('/unreal/1/reachedgoal', Vector3, callback_UE2, callback_args=(ue_pos[1],ros_pos[1],listener, robot2_position_record))
 
     interface = MoveGroupPythonInterfaceTutorial()
-    ue_rviz_interface = RViz_UE_Interface(interface.scene)
+    ue_rviz_interface = RViz_UE_Interface(interface.scene, listener)
     times_all = []
     dists_all = []
+    total_render_time = 0
     while not rospy.is_shutdown():
         #print("\n")
         #print("TF")
@@ -356,7 +418,7 @@ if __name__ == "__main__":
         goal = goals[goal_id]
         #distance = np.linalg.norm([ros_pos[0]-ue_pos[0], ros_pos[1]-ue_pos[1], ros_pos[2]-ue_pos[2]])
         #print(f"Immediate Distance: {distance}")
-        print(goal)
+        #print(goals)
         #continue
         success = interface.plan_cartesian_paths(interface.robot1_group, xyz=goal[1], rpy=goal[0])
         
@@ -367,8 +429,8 @@ if __name__ == "__main__":
         if success in ["linear", "joint"]:
             goal_id += 1
             # get in
-            goal[1][1] -= 0.2
-            success = interface.plan_cartesian_paths(interface.robot1_group, xyz=goal[1], rpy=goal[0])
+            #goal[1][1] -= 0.2
+            #success = interface.plan_cartesian_paths(interface.robot1_group, xyz=goal[1], rpy=goal[0])
 
             distance = np.linalg.norm([goal[1][0]-ue_pos[0], goal[1][1]-ue_pos[1], goal[1][2]-ue_pos[2]])
             print(f"Immediate Distance: {distance}")
@@ -383,15 +445,41 @@ if __name__ == "__main__":
             print(f"One Second Distance: {distance}")
             times_all.append(times)
             dists_all.append(dists)
-            pub_data0.publish(Bool(True))
-            ue_rviz_interface.frame_id = "rob1_cam_link"
-            time.sleep(.2)
-            pub_data0.publish(Bool(False))
-            ue_rviz_interface.update_RViz_point_cloud(wait_for_image = True)
+            
+            
+            def capture(pub: rospy.Publisher,
+                        ue_rviz: RViz_UE_Interface,
+                        render_time = 0.5,
+                        publish = False): # 0.2 fast, 0.5 medium, 1 high quality
+                pub.publish(Bool(True))
+                time.sleep(render_time)
+                pub.publish(Bool(False))
+                ue_rviz.update_RViz_point_cloud(wait_for_image = True, publish = publish)
+            render_time_start = time.time()
 
+            ue_rviz_interface.frame_id = "rob1_cam1_link"
+            capture(pub_data2, ue_rviz_interface, publish=True)
+            ue_rviz_interface.frame_id = "rob1_cam2_link"
+            capture(pub_data2, ue_rviz_interface, publish=True)
+            ue_rviz_interface.frame_id = "rob1_cam3_link"
+            capture(pub_data2, ue_rviz_interface, publish=True)
+            ue_rviz_interface.frame_id = "rob1_cam4_link"
+            capture(pub_data2, ue_rviz_interface, publish=True)
+            
+            #capture(pub_data1, ue_rviz_interface)
+            #capture(pub_data1, ue_rviz_interface)
+            #capture(pub_data1, ue_rviz_interface)
+            #capture(pub_data1, ue_rviz_interface)
+#
+            #capture(pub_data2, ue_rviz_interface)
+            #capture(pub_data2, ue_rviz_interface)
+            #capture(pub_data2, ue_rviz_interface)
+            #capture(pub_data2, ue_rviz_interface)
+            render_time_stop = time.time()
+            total_render_time += render_time_stop - render_time_start
             # get out
-            goal[1][1] += 0.2
-            success = interface.plan_cartesian_paths(interface.robot1_group, xyz=goal[1], rpy=goal[0])
+            #goal[1][1] += 0.2
+            #success = interface.plan_cartesian_paths(interface.robot1_group, xyz=goal[1], rpy=goal[0])
         #print(f"Goal (xyz, rpy): {goal}")
         #print(f"Robot Positions (xyz): {ue_pos}")
         rate.sleep()
@@ -399,7 +487,7 @@ if __name__ == "__main__":
         #continue
     
     end_time = time.time()
-    print(f"Total Time: {end_time-start_time}")
+    print(f"Total Time: {end_time-start_time}, Render Time: {total_render_time}")
     print(f"Immediate: {pd.DataFrame([d[0] for d in dists_all]).describe()}")
     print(f"Final: {pd.DataFrame([d[-1] for d in dists_all]).describe()}")
     import more_itertools

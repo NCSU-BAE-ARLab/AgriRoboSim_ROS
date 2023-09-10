@@ -5,3 +5,4 @@ Robot1:
   goal_joint_tolerance: 0.0001
   goal_position_tolerance: 0.0001
   goal_orientation_tolerance: 0.001
+  solve_type: Distance
