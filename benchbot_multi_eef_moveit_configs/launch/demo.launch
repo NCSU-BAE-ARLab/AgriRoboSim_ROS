@@ -40,7 +40,9 @@
     <!-- Given the published joint states, publish tf for the robot links -->
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="true" output="screen" />
   </group>
-
+  <group ns="move_group">
+    <rosparam command="load" file="$(find benchbot_multi_eef_moveit_configs)/config/kinematics.yaml"/>
+  </group>
   <!-- Run the main MoveIt executable without trajectory execution (we do not have controllers configured by default) -->
   <include file="$(dirname)/move_group.launch">
     <arg name="allow_trajectory_execution" value="true"/>

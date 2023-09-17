@@ -292,9 +292,9 @@ class RViz_UE_Interface(object):
         shutil.move(image_dir+"temp/"+[i for i in found_image if "_Depth" in i][0], image_dir+"Depth/"+[i for i in found_image if "_Depth" in i][0])
         shutil.move(image_dir+"temp/"+[i for i in found_image if "_Segment" in i][0], image_dir+"Segmentation/"+[i for i in found_image if "_Segment" in i][0])
         #shutil.move(image_dir+"temp/"+[i for i in found_image if "_Segment" in i][0], image_dir+"Segmentation/"+[i for i in found_image if "_Segment" in i][0])
-        if publish: self.UEdepth_to_RViz_pointcloud(self.tomato_filter(segment, depth), color)
+        if publish: self.UEdepth_to_RViz_pointcloud(self.filter(segment, depth), color)
         #if publish: self.UEdepth_to_RViz_pointcloud(depth, color)
-    def tomato_filter(self, segment_image, depth_image, distance = .35, percentage = 0.5):
+    def filter(self, segment_image, depth_image, distance = .35, percentage = 0.5):
         dimension = segment_image.shape[0] * segment_image.shape[1]
         tomato_color_counts = sum(sum(segment_image[:,:,0] == 255))
         tomato_percentage = tomato_color_counts / dimension * 100
