@@ -56,7 +56,7 @@ Robot2_Coord = [0,1,0]
 #Rot_Matrix = so3.from_rpy((0,0,np.pi/2))
 # cylinder properties
 R_cy = .6
-Phi_cy_N = 5
+Phi_cy_N = 0
 height_N = 1
 height_1 = .1
 height = 0
@@ -76,8 +76,8 @@ for i in range(height_N):
 #        height_Sample[i] = np.flip(height_Sample[i])
 # sphere properties
 R = .5
-Theta_N = 3
-Phi_N = 5
+Theta_N = 5 # layers
+Phi_N = 10 # columns
 Theta_Range = [np.pi/5, 3*np.pi/7]
 Phi_Range = [np.pi/6, np.pi-np.pi/6]
 Theta = np.linspace(Theta_Range[0], Theta_Range[1], Theta_N)

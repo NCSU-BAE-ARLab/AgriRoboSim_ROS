@@ -21,7 +21,16 @@ import open3d as o3d
 import os
 import cv2
 MAX_PLANNING_ATTEMPTS = 5
-DISTANCE_THRESHOLD = 0.00001
+DISTANCE_THRESHOLD = 0.05 / 1000 # mm
+WAIT_TIME = 5
+RENDER_TIME = 1
+MAX_POINT_CLOUD = 10_000_000
+INTRINSICS_LIST = { "1080p_90FOV": o3d.camera.PinholeCameraIntrinsic(1920,1080,2424.2424877852509, 2424.2424877852509, 960, 540),
+                    "1080p_60FOV": o3d.camera.PinholeCameraIntrinsic(1920,1080,1656.661035256662, 1658.711605946089, 960, 540),
+                    "1080p_RaspPiv3Wide": o3d.camera.PinholeCameraIntrinsic(1920,1080,818.60469302023728, 818.60469302023728, 960, 540), # Rasp Cam v3 Wide model 
+                    "480p_90FOV": o3d.camera.PinholeCameraIntrinsic(640, 480,320, 320, 320, 240),
+                    "960p_90FOV": o3d.camera.PinholeCameraIntrinsic(1280,960,640, 640, 640, 480) # 1280x960, 90 FOV
+                   }
 # roslaunch demo.launch
 def readSetPoints(filePath = None):
     if filePath is not None:
@@ -161,7 +170,7 @@ class MoveGroupPythonInterfaceTutorial(object):
 
         (plan, fraction) = group.compute_cartesian_path(
         waypoints, eef_step = 0.01, jump_threshold = 0.0)
-        print("-"*20)
+        
         if fraction > 0.9999:
             print("Found and Executing Linear Movement...")
             group.execute(plan, wait=True)
@@ -191,12 +200,12 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.scene.add_box("rob1_stand", box_pose, size=(0.2, 0.2, .95))
 
 class RViz_UE_Interface(object):
-    def __init__(self, scene : moveit_commander.PlanningSceneInterface, listener) -> None:
+    def __init__(self, scene : moveit_commander.PlanningSceneInterface, listener, ue_intrinsics) -> None:
         from sensor_msgs.msg import PointCloud2
         self.listener = listener
         self.scene = scene
         #self.ue_intrinsics = o3d.camera.PinholeCameraIntrinsic(1920,1080,2424.2424877852509, 2424.2424877852509, 960, 540)
-        self.ue_intrinsics = o3d.camera.PinholeCameraIntrinsic(1920,1080,1656.661035256662, 1658.711605946089, 960, 540) # 1920x1080, 60 FOV
+        self.ue_intrinsics = ue_intrinsics
         #self.ue_intrinsics = o3d.camera.PinholeCameraIntrinsic(640,480,320, 320, 320, 240) # 640x480, 90 FOV
         #self.ue_intrinsics = o3d.camera.PinholeCameraIntrinsic(1280,960,640, 640, 640, 480) # 1280x960, 90 FOV
         self.frame_id = "world"
@@ -209,18 +218,16 @@ class RViz_UE_Interface(object):
         from sensor_msgs.msg import PointField
         # generate point cloud
 
-        o3d_depth = o3d.geometry.Image(depth)#*87.5)
-        
+        o3d_depth = o3d.geometry.Image(depth[:,:,2]*10) # UE5 captures depth in cm, depth should be mm
         o3d_color = o3d.geometry.Image(color)
         o3d_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d_color, o3d_depth, convert_rgb_to_intensity=False)
-        
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(o3d_rgbd, self.ue_intrinsics)
-        pcd = pcd.scale(87.5,[0,0,0])
+        #o3d.visualization.draw_geometries([pcd])
 
+        # transform pointcloud from camera frame to world frame, and then concat with previous pointcloud
         header = std_msgs.msg.Header()
         header.stamp = rospy.Time.now()
         header.frame_id = "world"
-        #header.frame_id = self.frame_id
         p, q = self.listener.lookupTransform('world',self.frame_id,rospy.Time(0))
         #pcd.transfrom()
         #print(transform)
@@ -236,7 +243,11 @@ class RViz_UE_Interface(object):
         #print(g)
         pcd = pcd.transform(g)
         self.combined_point_cloud += pcd
+        if (len(self.combined_point_cloud.points) > MAX_POINT_CLOUD):
+            self.combined_point_cloud = self.combined_point_cloud.voxel_down_sample(0.001)
         self.save_combined_point_cloud()
+
+        # prepare to publish the current point cloud to RViz (not combined point cloud)
         fields = [PointField('x', 0, PointField.FLOAT32, 1),
                   PointField('y', 4, PointField.FLOAT32, 1),
                   PointField('z', 8, PointField.FLOAT32, 1),
@@ -244,17 +255,12 @@ class RViz_UE_Interface(object):
         
         o3d_pcd_colors = (np.array(pcd.colors)*255).astype(np.uint32)
         rgba = np.zeros((len(pcd.points),1),dtype=object)
-        #print((o3d_pcd_colors[:,0] << 24).shape)
-        rgba += 255 << 24#.reshape((len(pcd.points),1)) # a
+        rgba += 255 << 24 # a
         rgba += (o3d_pcd_colors[:,0] << 16).reshape((len(pcd.points),1)) # r
         rgba += (o3d_pcd_colors[:,1] << 8).reshape((len(pcd.points),1)) # g
         rgba += o3d_pcd_colors[:,2].reshape((len(pcd.points),1)) #b
-        #print(np.binary_repr(rgba[0,0], width=32), rgba.dtype)
-        #print(o3d_pcd_colors[0,0],
-        #      o3d_pcd_colors[0,1],
-        #      o3d_pcd_colors[0,2])
         packed_points = np.hstack((pcd.points,rgba))
-        print(packed_points.shape)
+        #print(packed_points.shape)
         ros_pcd_color = pcl2.create_cloud(header, fields, packed_points[::100])
         #print(ros_pcd)
         self.pcd_pub.publish(ros_pcd_color)
@@ -352,13 +358,16 @@ def callback_UE2(data, args):#_ue_pos, _ros_pos, tf_listener):
     #print(args[0])
 def capture(pub: rospy.Publisher,
             ue_rviz: RViz_UE_Interface,
-            render_time = 0.5,
+            render_time = RENDER_TIME,
             publish = False): # 0.2 fast, 0.5 medium, 1 high quality
+    print("Rendering Images...")
     pub.publish(Bool(True))
     time.sleep(render_time)
     pub.publish(Bool(False))
+    print("Visualizing Images as Point Clouds...")
     ue_rviz.update_RViz_point_cloud(wait_for_image = True, publish = publish)
-if __name__ == "__main__":
+
+def main():
     os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
     np.set_printoptions(suppress=True, precision=8)
     start_time = time.time()
@@ -386,19 +395,13 @@ if __name__ == "__main__":
     rospy.Subscriber('/unreal/1/reachedgoal', Vector3, callback_UE2, callback_args=(ue_pos[1],ros_pos[1],listener, robot2_position_record))
 
     interface = MoveGroupPythonInterfaceTutorial()
-    ue_rviz_interface = RViz_UE_Interface(interface.scene, listener)
+    ue_rviz_interface = RViz_UE_Interface(interface.scene, listener, INTRINSICS_LIST["1080p_60FOV"])
     times_all = []
     dists_all = []
     while not rospy.is_shutdown():
         print("\n")
-        print("TF")
-        print(len(robot1_position_record))
-        print(len(robot2_position_record))
-        #now = rospy.Time.now()
-        #listener.waitForTransform('rob1_ee_link','world', now, rospy.Duration(4.0))
-        #print(listener.lookupTransform('world','rob1_ee_link',rospy.Time(0)))
-        #print(listener.lookupTransform('world','rob2_ee_link',rospy.Time(0)))
-        #print(listener.lookupTransform('world','rob2_base_link',rospy.Time(0)))
+        print("-"*20)
+        print(f"Goal {sum(goal_id)}/{sum(max_goal_id)}")
         # execute robot 1 routine
         if goal_id[0] > goal_id[1] and goal_id[1] < max_goal_id[1]:
             goal = goals[1][goal_id[1]]
@@ -409,19 +412,19 @@ if __name__ == "__main__":
             #plt.show()
             if success in ["linear", "joint"]:
                 goal_id[1] += 1
-                distance = np.linalg.norm([goal[1][0]-ue_pos[1][0], goal[1][1]-ue_pos[1][1], goal[1][2]-ue_pos[1][2]])
+                distance = np.linalg.norm([ros_pos[1][0]-ue_pos[1][0], ros_pos[1][1]-ue_pos[1][1], ros_pos[1][2]-ue_pos[1][2]])
                 print(f"Immediate Distance: {distance}")
-                t_end = time.time() + 2
+                t_end = time.time() + WAIT_TIME
                 times = []
                 dists = []
                 while time.time() < t_end:
-                    distance = np.linalg.norm([goal[1][0]-ue_pos[1][0], goal[1][1]-ue_pos[1][1], goal[1][2]-ue_pos[1][2]])
+                    distance = np.linalg.norm([ros_pos[1][0]-ue_pos[1][0], ros_pos[1][1]-ue_pos[1][1], ros_pos[1][2]-ue_pos[1][2]])
                     #print(f"Time: {t_end-time.time()} Distance: {distance}") 
-                    times.append(time.time()-t_end+2)
+                    times.append(time.time()-t_end+WAIT_TIME)
                     dists.append(distance)
                     if distance < DISTANCE_THRESHOLD:
                         break
-                print(f"One Second Distance: {distance}")
+                print(f"{WAIT_TIME} Second Distance: {distance}")
                 times_all.append(times)
                 dists_all.append(dists)
 
@@ -439,18 +442,18 @@ if __name__ == "__main__":
             #success = interface.go_to_pose_goal(interface.robot1_group, xyz=goal[1], rpy=goal[0])
             if success in ["linear", "joint"]:
                 goal_id[0] += 1
-                distance = np.linalg.norm([goal[1][0]-ue_pos[0][0], goal[1][1]-ue_pos[0][1], goal[1][2]-ue_pos[0][2]])
+                distance = np.linalg.norm([ros_pos[0][0]-ue_pos[0][0], ros_pos[0][1]-ue_pos[0][1], ros_pos[0][2]-ue_pos[0][2]])
                 print(f"Immediate Distance: {distance}")
-                t_end = time.time() + 2
+                t_end = time.time() + WAIT_TIME
                 times = []
                 dists = []
                 while time.time() < t_end:
-                    distance = np.linalg.norm([goal[1][0]-ue_pos[0][0], goal[1][1]-ue_pos[0][1], goal[1][2]-ue_pos[0][2]])
-                    times.append(time.time()-t_end+2)
+                    distance = np.linalg.norm([ros_pos[0][0]-ue_pos[0][0], ros_pos[0][1]-ue_pos[0][1], ros_pos[0][2]-ue_pos[0][2]])
+                    times.append(time.time()-t_end+WAIT_TIME)
                     dists.append(distance)
                     if distance < DISTANCE_THRESHOLD:
                         break
-                print(f"One Second Distance: {distance}")
+                print(f"{WAIT_TIME} Second Distance: {distance}")
                 times_all.append(times)
                 dists_all.append(dists) 
                 #print(f"Time: {t_end-time.time()} Distance: {distance}")
@@ -483,3 +486,6 @@ if __name__ == "__main__":
     plt.show()
     #plt.plot(dists)
     #plt.show()
+    
+if __name__ == "__main__":
+    main()
