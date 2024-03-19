@@ -12,6 +12,6 @@ ROS noetic and moveit is tested, ur_description from [this repo (melodic-devel b
 2. clone ur_description and rosbridge
 3. build and source
 4. `roslaunch rosbridge_server rosbridge_websocket.launch bson_only_mode:=True websocket_external_port:=80`
-5. `roslaunch benchbot_multi_eef_moveit_configs demo.launch` or `roslaunch tomato_moveit_configs demo.launch` depending on the UE5 simulation
+5. `roslaunch benchbot_multi_eef_moveit_configs startup.launch` or `roslaunch tomato_moveit_configs startup.launch` depending on the UE5 simulation
 6. Run [UE5 simulation](https://github.com/XingjianL/AgriRobSim_UE5)
 7. Run `ROS_UE_comm.py`
