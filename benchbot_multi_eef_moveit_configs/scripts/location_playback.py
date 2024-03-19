@@ -7,7 +7,7 @@ import scipy.stats as stats
 from dtaidistance import dtw_ndim
 import seaborn as sns
 TIME_DELAY = 0
-out_dir = "/home/lixin/catkin_ws/src/benchbot_moveit/benchbot_multi_eef_moveit_configs/outputs/3/"
+out_dir = "/home/lixin/catkin_ws/src/benchbot_moveit/benchbot_multi_eef_moveit_configs/outputs/12/"
 robot1_df = pd.read_csv(out_dir + 'robot1_pos.csv')#, header=None)
 robot2_df = pd.read_csv(out_dir + 'robot2_pos.csv')#, header=None)
 #joints_1 = pd.read_csv('/home/lixin/catkin_ws/src/BenchBot/logs/robot1_ROS_location.csv')
@@ -148,7 +148,7 @@ ax.legend()
 print(int(max(len(x1),len(x_1))))
 fps = int(1/(robots["t"].max()/len(x1)))*2
 
-if True:
+if False:
     ani = animation.FuncAnimation(fig,
                                   update,
                                   frames = int(max(len(x1),len(x_1))),

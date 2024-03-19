@@ -9,62 +9,62 @@ default_acceleration_scaling_factor: 1
 # Joint limits can be turned off with [has_velocity_limits, has_acceleration_limits]
 joint_limits:
   rob1_elbow_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 3.141592653589793
     has_acceleration_limits: false
     max_acceleration: 0
   rob1_shoulder_lift_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 2.094395102393195
     has_acceleration_limits: false
     max_acceleration: 0
   rob1_shoulder_pan_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 2.094395102393195
     has_acceleration_limits: false
     max_acceleration: 0
   rob1_wrist_1_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 3.141592653589793
     has_acceleration_limits: false
     max_acceleration: 0
   rob1_wrist_2_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 3.141592653589793
     has_acceleration_limits: false
     max_acceleration: 0
   rob1_wrist_3_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 3.141592653589793
     has_acceleration_limits: false
     max_acceleration: 0
   rob2_elbow_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 3.141592653589793
     has_acceleration_limits: false
     max_acceleration: 0
   rob2_shoulder_lift_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 2.094395102393195
     has_acceleration_limits: false
     max_acceleration: 0
   rob2_shoulder_pan_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 2.094395102393195
     has_acceleration_limits: false
     max_acceleration: 0
   rob2_wrist_1_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 3.141592653589793
     has_acceleration_limits: false
     max_acceleration: 0
   rob2_wrist_2_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 3.141592653589793
     has_acceleration_limits: false
     max_acceleration: 0
   rob2_wrist_3_joint:
-    has_velocity_limits: true
+    has_velocity_limits: false
     max_velocity: 3.141592653589793
     has_acceleration_limits: false
     max_acceleration: 0

@@ -22,15 +22,17 @@ import os
 import cv2
 MAX_PLANNING_ATTEMPTS = 5
 DISTANCE_THRESHOLD = 0.05 / 1000 # mm
-WAIT_TIME = 5
+WAIT_TIME = 5 # seconds to wait for image files
 RENDER_TIME = 1
-MAX_POINT_CLOUD = 10_000_000
+MAX_POINT_CLOUD = 100_000 # exceeding this will downsample the point cloud using voxel_down_sample
 INTRINSICS_LIST = { "1080p_90FOV": o3d.camera.PinholeCameraIntrinsic(1920,1080,2424.2424877852509, 2424.2424877852509, 960, 540),
                     "1080p_60FOV": o3d.camera.PinholeCameraIntrinsic(1920,1080,1656.661035256662, 1658.711605946089, 960, 540),
                     "1080p_RaspPiv3Wide": o3d.camera.PinholeCameraIntrinsic(1920,1080,818.60469302023728, 818.60469302023728, 960, 540), # Rasp Cam v3 Wide model 
                     "480p_90FOV": o3d.camera.PinholeCameraIntrinsic(640, 480,320, 320, 320, 240),
                     "960p_90FOV": o3d.camera.PinholeCameraIntrinsic(1280,960,640, 640, 640, 480) # 1280x960, 90 FOV
                    }
+#IMAGE_DIR = "/mnt/c/Users/lixin/AppData/Local/AgriRoboSim/Saved/Test/"
+IMAGE_DIR ="/mnt/d/UnrealProjects/AgriRoboSim_UE5/AgriRoboSim/Saved/Test/"
 # roslaunch demo.launch
 def readSetPoints(filePath = None):
     if filePath is not None:
@@ -190,14 +192,14 @@ class MoveGroupPythonInterfaceTutorial(object):
         box_pose.pose.orientation.y = q[0]
         box_pose.pose.orientation.z = q[0]
         box_pose.pose.orientation.w = q[0]
-        self.scene.add_box("plant_stand", box_pose, size=(0.5, 0.5, .95))
+        self.scene.add_box("plant_stand", box_pose, size=(0.5, 0.5, 0.95))
         box_pose.pose.position.z = 1.375
         self.scene.add_box("pot", box_pose, size=(0.3, 0.3, .25))
         box_pose.pose.position.y = 1.0
         box_pose.pose.position.z = 1.0
-        self.scene.add_box("rob2_stand", box_pose, size=(0.2, 0.2, .95))
+        self.scene.add_box("rob2_stand", box_pose, size=(0.25, 0.25, .95))
         box_pose.pose.position.y = -1.0
-        self.scene.add_box("rob1_stand", box_pose, size=(0.2, 0.2, .95))
+        self.scene.add_box("rob1_stand", box_pose, size=(0.25, 0.25, .95))
 
 class RViz_UE_Interface(object):
     def __init__(self, scene : moveit_commander.PlanningSceneInterface, listener, ue_intrinsics) -> None:
@@ -240,7 +242,8 @@ class RViz_UE_Interface(object):
             q = q / norm
         g = tf.transformations.quaternion_matrix(q)
         g[0:3, -1] = p
-        #print(g)
+        print(np.asarray(pcd.points).shape)
+        print(g)
         pcd = pcd.transform(g)
         self.combined_point_cloud += pcd
         if (len(self.combined_point_cloud.points) > MAX_POINT_CLOUD):
@@ -261,11 +264,12 @@ class RViz_UE_Interface(object):
         rgba += o3d_pcd_colors[:,2].reshape((len(pcd.points),1)) #b
         packed_points = np.hstack((pcd.points,rgba))
         #print(packed_points.shape)
-        ros_pcd_color = pcl2.create_cloud(header, fields, packed_points[::100])
+        ros_pcd_color = pcl2.create_cloud(header, fields, packed_points[::1])
         #print(ros_pcd)
         self.pcd_pub.publish(ros_pcd_color)
     def update_RViz_point_cloud(self, wait_for_image = True, time_out = 5, publish = False):
-        image_dir = "/mnt/d/UnrealProjects/Project1-UR10/Test2 5.2/Saved/Test/"
+        #image_dir = "/mnt/d/UnrealProjects/AgriRoboSim_UE5/AgriRoboSim/Saved/Test/"
+        image_dir = IMAGE_DIR
         temp_images = os.listdir(image_dir+"temp/")
         #print(temp_images)
         found_image = [f for f in temp_images if "_Depth" in f or "_Color" in f]
@@ -273,7 +277,7 @@ class RViz_UE_Interface(object):
             timeout_time = time.time() + time_out
             while len(found_image) < 3:
                 temp_images = os.listdir(image_dir+"temp/")
-                found_image = [f for f in temp_images if "_Depth" in f or "_Color" in f or "_Segment" in f]
+                found_image = list(set([f for f in temp_images if "_Depth" in f or "_Color" in f or "_Segment" in f])) # sometimes depth gets read twice so only unique entries
                 #print(found_image)
                 if time.time() > timeout_time:
                     print("Timed out waiting for Image")
@@ -281,6 +285,9 @@ class RViz_UE_Interface(object):
         else:
             if len(found_image) < 3:
                 return
+        print(found_image)
+        assert os.path.exists(image_dir+"temp/"+[i for i in found_image if "_Color" in i][0])
+        time.sleep(0.1) # delay time for file to be properly saved or opencv might give an unreadable error
         color = cv2.cvtColor(cv2.imread(image_dir+"temp/"+[i for i in found_image if "_Color" in i][0]), cv2.COLOR_BGRA2RGB)
         segment = cv2.cvtColor(cv2.imread(image_dir+"temp/"+[i for i in found_image if "_Segment" in i][0]), cv2.COLOR_BGRA2RGB)
         depth = cv2.imread(image_dir+"temp/"+[i for i in found_image if "_Depth" in i][0], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
@@ -289,6 +296,10 @@ class RViz_UE_Interface(object):
         #plt.subplot(2, 2, 2)
         #plt.imshow(segment)
         import shutil
+        if not os.path.exists(image_dir+"Color/"):
+            os.mkdir(image_dir+"Color/")
+            os.mkdir(image_dir+"Segmentation/")
+            os.mkdir(image_dir+"Depth/")
         shutil.move(image_dir+"temp/"+[i for i in found_image if "_Color" in i][0], image_dir+"Color/"+[i for i in found_image if "_Color" in i][0])
         shutil.move(image_dir+"temp/"+[i for i in found_image if "_Depth" in i][0], image_dir+"Depth/"+[i for i in found_image if "_Depth" in i][0])
         shutil.move(image_dir+"temp/"+[i for i in found_image if "_Segment" in i][0], image_dir+"Segmentation/"+[i for i in found_image if "_Segment" in i][0])
@@ -318,20 +329,24 @@ class RViz_UE_Interface(object):
     #interface.add_box()
 def callback_joint(data : JointState, args):#, goalReached, csv_writer):
         # demo.launch
-    args[0].publish(Vector3(np.degrees(data.position[0]), np.degrees(data.position[1]), np.degrees(data.position[2])))
+    #args[0].publish(Vector3(np.degrees(data.position[0]), np.degrees(data.position[1]), np.degrees(data.position[2])))
         # demo_gazebo.launch
     #args[0].publish(Vector3(np.degrees(data.position[2]), np.degrees(data.position[1]), np.degrees(data.position[0])))
     
-    args[1].publish(Vector3(np.degrees(data.position[3]), np.degrees(data.position[4]), np.degrees(data.position[5])))
+    #args[1].publish(Vector3(np.degrees(data.position[3]), np.degrees(data.position[4]), np.degrees(data.position[5])))
     
         # demo.launch
-    args[2].publish(Vector3(np.degrees(data.position[6]), np.degrees(data.position[7]), np.degrees(data.position[8])))
+    #args[2].publish(Vector3(np.degrees(data.position[6]), np.degrees(data.position[7]), np.degrees(data.position[8])))
         # demo_gazebo.launch
     #args[2].publish(Vector3(np.degrees(data.position[8]), np.degrees(data.position[7]), np.degrees(data.position[6])))
     
-    args[3].publish(Vector3(np.degrees(data.position[9]), np.degrees(data.position[10]),np.degrees( data.position[11])))
+    #args[3].publish(Vector3(np.degrees(data.position[9]), np.degrees(data.position[10]),np.degrees( data.position[11])))
 
-def callback_UE1(data, args):#_ue_pos, _ros_pos, tf_listener):
+    #args[4].publish(data)
+    #args[5].publish(data)
+    pass
+
+def callback_UE1EEF(data, args):#_ue_pos, _ros_pos, tf_listener):
     #print(data)
     args[0][0] = -data.x/100
     args[0][1] = data.y/100
@@ -342,7 +357,7 @@ def callback_UE1(data, args):#_ue_pos, _ros_pos, tf_listener):
     args[1][2] = trans[2]
     args[3].append(args[0]+args[1]+[time.time()])
 
-def callback_UE2(data, args):#_ue_pos, _ros_pos, tf_listener):
+def callback_UE2EEF(data, args):#_ue_pos, _ros_pos, tf_listener):
     #print(data)
     args[0][0] = -data.x/100
     args[0][1] = data.y/100
@@ -356,6 +371,18 @@ def callback_UE2(data, args):#_ue_pos, _ros_pos, tf_listener):
     #print()
     #print(trans)
     #print(args[0])
+def callback_UE1Joint(data : JointState, args):
+    args[0] = data.position
+    args[1] = data.velocity
+    args[2].append(args[0]+args[1]+tuple([time.time()]))
+    pass
+def callback_UE2Joint(data : JointState, args):
+    args[0] = data.position
+    args[1] = data.velocity
+    #print(type(args[0]), type(args[1]))
+    args[2].append(data.position+data.velocity+tuple([time.time()]))
+    #print(args[2])
+    pass
 def capture(pub: rospy.Publisher,
             ue_rviz: RViz_UE_Interface,
             render_time = RENDER_TIME,
@@ -364,6 +391,7 @@ def capture(pub: rospy.Publisher,
     pub.publish(Bool(True))
     time.sleep(render_time)
     pub.publish(Bool(False))
+    time.sleep(0.2)
     print("Visualizing Images as Point Clouds...")
     ue_rviz.update_RViz_point_cloud(wait_for_image = True, publish = publish)
 
@@ -377,13 +405,15 @@ def main():
     max_goal_id = [len(goals[0]), len(goals[1])]
     rospy.init_node('ROS_UE_comm', anonymous=True)
     rate = rospy.Rate(100)
-    pub01 = rospy.Publisher('/unreal/0/vec3_1', Vector3, queue_size=1)#0)
-    pub02 = rospy.Publisher('/unreal/0/vec3_2', Vector3, queue_size=1)#0)
-    pub11 = rospy.Publisher('/unreal/1/vec3_1', Vector3, queue_size=1)#0)
-    pub12 = rospy.Publisher('/unreal/1/vec3_2', Vector3, queue_size=1)#0)
-    pub_data0 = rospy.Publisher('/unreal/0/takedata', Bool, queue_size=1)
-    pub_data1 = rospy.Publisher('/unreal/1/takedata', Bool, queue_size=1)
-    rospy.Subscriber('/joint_states', JointState, callback_joint, callback_args=(pub01,pub02,pub11,pub12))
+    pub01 = rospy.Publisher('/unreal/1/vec3_1', Vector3, queue_size=1)#0)
+    pub02 = rospy.Publisher('/unreal/1/vec3_2', Vector3, queue_size=1)#0)
+    pub11 = rospy.Publisher('/unreal/2/vec3_1', Vector3, queue_size=1)#0)
+    pub12 = rospy.Publisher('/unreal/2/vec3_2', Vector3, queue_size=1)#0)
+    pub0joints = rospy.Publisher('/unreal/1/joints', JointState, queue_size=1)
+    pub1joints = rospy.Publisher('/unreal/2/joints', JointState, queue_size=1)#0)
+    pub_data0 = rospy.Publisher('/unreal/1/takedata', Bool, queue_size=1)
+    pub_data1 = rospy.Publisher('/unreal/2/takedata', Bool, queue_size=1)
+    rospy.Subscriber('/joint_states', JointState, callback_joint, callback_args=(pub01,pub02,pub11,pub12,pub0joints,pub1joints))
     listener = tf.TransformListener()
     
     time.sleep(1)
@@ -391,19 +421,26 @@ def main():
     ros_pos = [[0,0,0],[0,0,0]]
     robot1_position_record = []
     robot2_position_record = []
-    rospy.Subscriber('/unreal/0/reachedgoal', Vector3, callback_UE1, callback_args=(ue_pos[0],ros_pos[0],listener, robot1_position_record))
-    rospy.Subscriber('/unreal/1/reachedgoal', Vector3, callback_UE2, callback_args=(ue_pos[1],ros_pos[1],listener, robot2_position_record))
-
+    rospy.Subscriber('/unreal/1/reachedgoal', Vector3, callback_UE1EEF, callback_args=(ue_pos[0],ros_pos[0],listener, robot1_position_record))
+    rospy.Subscriber('/unreal/2/reachedgoal', Vector3, callback_UE2EEF, callback_args=(ue_pos[1],ros_pos[1],listener, robot2_position_record))
+    ue_joints = [[0,0,0,0,0,0],[0,0,0,0,0,0]]
+    ue_joints_err = [[0,0,0,0,0,0],[0,0,0,0,0,0]]
+    robot1_joints_record = []
+    robot2_joints_record = []
+    
     interface = MoveGroupPythonInterfaceTutorial()
-    ue_rviz_interface = RViz_UE_Interface(interface.scene, listener, INTRINSICS_LIST["1080p_60FOV"])
+    ue_rviz_interface = RViz_UE_Interface(interface.scene, listener, INTRINSICS_LIST["1080p_RaspPiv3Wide"])
     times_all = []
     dists_all = []
+    success_counts = 0
+    
+    joint_sub1 = rospy.Subscriber('/unreal/2/joint_states', JointState, callback_UE2Joint, callback_args=[ue_joints[1],ue_joints_err[1],robot2_joints_record])
     while not rospy.is_shutdown():
         print("\n")
         print("-"*20)
         print(f"Goal {sum(goal_id)}/{sum(max_goal_id)}")
         # execute robot 1 routine
-        if goal_id[0] > goal_id[1] and goal_id[1] < max_goal_id[1]:
+        if goal_id[1] < max_goal_id[1]: #and goal_id[0] > goal_id[1]:
             goal = goals[1][goal_id[1]]
             success = interface.plan_cartesian_paths(interface.robot2_group, xyz=goal[1], rpy=goal[0])
             #success = interface.go_to_pose_goal(interface.robot2_group, xyz=goal[1], rpy=goal[0])
@@ -412,6 +449,7 @@ def main():
             #plt.show()
             if success in ["linear", "joint"]:
                 goal_id[1] += 1
+                robot2_position_record.append([-1]*7)
                 distance = np.linalg.norm([ros_pos[1][0]-ue_pos[1][0], ros_pos[1][1]-ue_pos[1][1], ros_pos[1][2]-ue_pos[1][2]])
                 print(f"Immediate Distance: {distance}")
                 t_end = time.time() + WAIT_TIME
@@ -424,16 +462,25 @@ def main():
                     dists.append(distance)
                     if distance < DISTANCE_THRESHOLD:
                         break
-                print(f"{WAIT_TIME} Second Distance: {distance}")
+                robot2_position_record.append([-2]*7)
+                print(f"{times[-1]} Second Distance: {distance}")
                 times_all.append(times)
                 dists_all.append(dists)
 
                 if distance < DISTANCE_THRESHOLD:
                     ue_rviz_interface.frame_id = "rob2_cam_link"
+                    success_counts += 1
                     capture(pub_data1, ue_rviz_interface, publish=True)
-
+                else:
+                    quit()
+                    ue_rviz_interface.frame_id = "rob2_cam_link"
+                    capture(pub_data1, ue_rviz_interface, publish=False)
+            if goal_id[1] == max_goal_id[1]:
+                interface.go_to_home_state(interface.robot2_group)
+                joint_sub1.unregister()
+                joint_sub2 = rospy.Subscriber('/unreal/1/joint_states', JointState, callback_UE1Joint, callback_args=[ue_joints[0],ue_joints_err[0],robot1_joints_record])
                 
-        elif goal_id[0] <= goal_id[1] and goal_id[0] < max_goal_id[0]:
+        elif goal_id[0] < max_goal_id[0]:# and goal_id[0] <= goal_id[1]:
             goal = goals[0][goal_id[0]]
             success = interface.plan_cartesian_paths(interface.robot1_group, xyz=goal[1], rpy=goal[0])
             
@@ -442,6 +489,7 @@ def main():
             #success = interface.go_to_pose_goal(interface.robot1_group, xyz=goal[1], rpy=goal[0])
             if success in ["linear", "joint"]:
                 goal_id[0] += 1
+                robot1_position_record.append([-1]*7)
                 distance = np.linalg.norm([ros_pos[0][0]-ue_pos[0][0], ros_pos[0][1]-ue_pos[0][1], ros_pos[0][2]-ue_pos[0][2]])
                 print(f"Immediate Distance: {distance}")
                 t_end = time.time() + WAIT_TIME
@@ -453,13 +501,19 @@ def main():
                     dists.append(distance)
                     if distance < DISTANCE_THRESHOLD:
                         break
-                print(f"{WAIT_TIME} Second Distance: {distance}")
+                robot1_position_record.append([-2]*7)
+                print(f"{times[-1]} Second Distance: {distance}")
                 times_all.append(times)
                 dists_all.append(dists) 
                 #print(f"Time: {t_end-time.time()} Distance: {distance}")
                 if distance < DISTANCE_THRESHOLD:
                     ue_rviz_interface.frame_id = "rob1_cam_link"
+                    success_counts += 1
                     capture(pub_data0, ue_rviz_interface, publish=True)
+                else:
+                    quit()
+                    ue_rviz_interface.frame_id = "rob1_cam_link"
+                    capture(pub_data0, ue_rviz_interface, publish=False)
         else:
             break
         #print(f"Goal (xyz, rpy): {goal}")
@@ -467,17 +521,22 @@ def main():
         rate.sleep()
         #rospy.spin()
         #continue
-    
+    joint_sub2.unregister()
     end_time = time.time()
-    print(f"Total Time: {end_time-start_time}")
+    print(f"Total Time: {end_time-start_time}, Successful (under threshold): {success_counts}")
     print(f"Immediate: {pd.DataFrame([d[0] for d in dists_all]).describe()}")
     print(f"Final: {pd.DataFrame([d[-1] for d in dists_all]).describe()}")
     import more_itertools
     print(f"Flattened: {pd.DataFrame(more_itertools.flatten(dists_all)).describe()}")
+    print(f"EEF Settle Time: {pd.DataFrame([d[-1] for d in times_all]).describe()}")
     np.savetxt("/home/lixin/catkin_ws/src/benchbot_moveit/benchbot_multi_eef_moveit_configs/outputs/robot1_pos.csv",
                np.array(robot1_position_record),delimiter=',',header="ue_x,ue_y,ue_z,ros_x,ros_y,ros_z,t")#,fmt="%s")
     np.savetxt("/home/lixin/catkin_ws/src/benchbot_moveit/benchbot_multi_eef_moveit_configs/outputs/robot2_pos.csv",
                np.array(robot2_position_record),delimiter=',',header="ue_x,ue_y,ue_z,ros_x,ros_y,ros_z,t")#,fmt="%s")
+    np.savetxt("/home/lixin/catkin_ws/src/benchbot_moveit/benchbot_multi_eef_moveit_configs/outputs/robot2_joints.csv",
+               np.array(robot2_joints_record),delimiter=',')#,fmt="%s")
+    np.savetxt("/home/lixin/catkin_ws/src/benchbot_moveit/benchbot_multi_eef_moveit_configs/outputs/robot1_joints.csv",
+               np.array(robot1_joints_record),delimiter=',')
     for i in range(len(times_all)):
         plt.step(times_all[i], dists_all[i], where='post')
     plt.xlabel("Time (s)")

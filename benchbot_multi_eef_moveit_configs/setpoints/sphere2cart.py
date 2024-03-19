@@ -79,7 +79,8 @@ R = .5
 Theta_N = 5 # layers
 Phi_N = 10 # columns
 Theta_Range = [np.pi/5, 3*np.pi/7]
-Phi_Range = [np.pi/6, np.pi-np.pi/6]
+#Phi_Range = [np.pi/6, np.pi-np.pi/6]
+Phi_Range = [np.pi/19, np.pi-np.pi/19]
 Theta = np.linspace(Theta_Range[0], Theta_Range[1], Theta_N)
 Phi = np.linspace(Phi_Range[0], Phi_Range[1], Phi_N)
 print(Phi)
@@ -140,7 +141,8 @@ ax = plt.axes(projection='3d')
 #ax.plot3D(Robot2_Setpoints_Cartesian_Plant[0], Robot2_Setpoints_Cartesian_Plant[1], Robot2_Setpoints_Cartesian_Plant[2], 'gray')
 ax.plot3D(Robot1_Setpoints_Cartesian[0], Robot1_Setpoints_Cartesian[1], Robot1_Setpoints_Cartesian[2], 'green')
 ax.plot3D(Robot2_Setpoints_Cartesian[0], Robot2_Setpoints_Cartesian[1], Robot2_Setpoints_Cartesian[2], 'red')
-
+ax.plot3D(Robot1_Setpoints_Cartesian[0], Robot1_Setpoints_Cartesian[1], Robot1_Setpoints_Cartesian[2], 'go')
+ax.plot3D(Robot2_Setpoints_Cartesian[0], Robot2_Setpoints_Cartesian[1], Robot2_Setpoints_Cartesian[2], 'ro')
 #ax.scatter3D(Robot1_Setpoints_Cartesian_Plant[0], Robot1_Setpoints_Cartesian_Plant[1], Robot1_Setpoints_Cartesian_Plant[2],  cmap='Greens')
 #ax.scatter3D(Robot1_Coord[0], Robot1_Coord[1], Robot1_Coord[2],  c='green')
 #
@@ -152,4 +154,5 @@ ax.set_zlim(1,3)
 ax.set_xlabel('x')
 ax.set_ylabel('y')
 ax.set_zlabel('z')
+ax.set_title(f"{len(Robot1_Setpoints_Cartesian[0])+len(Robot2_Setpoints_Cartesian[0])} Setpoints")
 plt.show()

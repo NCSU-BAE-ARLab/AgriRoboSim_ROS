@@ -10,7 +10,7 @@
         <visual>
             <origin xyz="0.0 0 0.08" rpy="0.0 0.0 0.0"/>
             <geometry>
-                <cylinder radius=".08" length=".16"/>
+                <cylinder radius=".05" length=".16"/>
             </geometry>
             <material name="White">
                 <color rgba="1.0 1.0 1.0 1.0" />
@@ -19,7 +19,7 @@
         <collision>
             <origin xyz="0.0 0 0.08" rpy="0.0 0.0 0.0"/>
             <geometry>
-            <cylinder radius=".08" length=".16"/>
+            <cylinder radius=".05" length=".16"/>
             </geometry>
         </collision>
     </link>
@@ -39,7 +39,7 @@
         <visual>
             <origin xyz="0.0 0 0.08" rpy="0.0 0.0 0.0"/>
             <geometry>
-                <cylinder radius=".08" length=".16"/>
+                <cylinder radius=".05" length=".16"/>
             </geometry>
             <material name="White">
                 <color rgba="1.0 1.0 1.0 1.0" />
@@ -48,7 +48,7 @@
         <collision>
             <origin xyz="0.0 0 0.08" rpy="0.0 0.0 0.0"/>
             <geometry>
-            <cylinder radius=".08" length=".16"/>
+            <cylinder radius=".05" length=".16"/>
             </geometry>
         </collision>
     </link>
